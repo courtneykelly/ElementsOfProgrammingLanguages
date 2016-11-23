@@ -1,0 +1,10 @@
+let colourList = Red::Green::Blue::Pink::([] : color) in
+let len = ref 20 in
+forward 15;
+while (!len < 500) {
+  let lenVal = !len in
+  randCol colourList;
+  forward lenVal;
+  right 60;
+  len := (lenVal + 10)
+}

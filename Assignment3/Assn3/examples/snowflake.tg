@@ -1,0 +1,20 @@
+let rec snowflakeSide(p: (int * int)): unit =
+  let (length, depth) = p in
+  if (depth == 0) then
+    forward length
+  else
+    snowflakeSide((length / 3), (depth - 1));
+    left 60;
+    snowflakeSide((length / 3), (depth - 1));
+    right 120;
+    snowflakeSide((length / 3), (depth - 1));
+    left 60;
+    snowflakeSide((length / 3), (depth - 1)) in
+let fun snowflake(p: (int * int)) =
+  let counter = ref 0 in
+  while (!counter < 3) {
+    snowflakeSide(p);
+    right 120;
+    counter := (!counter + 1)
+  } in
+snowflake(800, 4)

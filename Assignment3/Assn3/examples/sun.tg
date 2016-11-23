@@ -1,0 +1,21 @@
+let colList = Red::Green::Blue::Pink::([] : color) in
+let fun drawRays(p:(int*int)) =
+  let (length,angle) = p in
+  forward length;
+  backward length;
+  right (angle / 2);
+  forward ((length * 3) / 4);
+  backward ((length * 3) / 4);
+  left (angle / 2)
+in 
+let rec drawSun(p: (int * int)): unit =
+    let (length,n) = p in 
+    let counterRef = ref n in
+    let angle = 360 / n in 
+    while (!counterRef > 0) {
+      randCol colList;
+      drawRays((length,angle));
+      right angle;
+      counterRef := (!counterRef - 1)
+    } in
+drawSun((300,90))

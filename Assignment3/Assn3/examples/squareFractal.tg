@@ -1,0 +1,14 @@
+let colList = Red::Green::Blue::Pink::([] : color) in
+let rec drawFractal(p: (int * int)): unit =
+  let (length, depth) = p in
+  if (depth == 0) then ()
+  else
+    let counterRef = ref 0 in
+    randCol colList;
+    while (!counterRef < 4) {
+      forward length;
+      right 90;
+      drawFractal((length / 3), (depth - 1));
+      counterRef := (!counterRef + 1)
+    } in
+drawFractal((360, 5))

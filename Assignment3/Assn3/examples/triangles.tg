@@ -1,0 +1,20 @@
+let colList = Red::Green::Blue::Pink::([] : color) in
+let fun drawTriangle(length: int) =
+  forward length;
+  right 120;
+  forward length;
+  right 120;
+  forward length;
+  right 120
+in
+let rec drawTriangles(p: (int * int)): unit =
+    let (length,n) = p in
+    let counterRef = ref n in
+    let angle = 360 / n in
+    while (!counterRef > 0) {
+      randCol colList;
+      drawTriangle(length);
+      right angle;
+      counterRef := (!counterRef - 1)
+    } in
+drawTriangles((900,360))
