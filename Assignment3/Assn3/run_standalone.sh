@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-scala -cp ".:TurtleEDSL.jar" Assignment3.TurtleStandalone.Assignment3Standalone $@
+scala -J-Xss200m -cp ".:TurtleEDSL.jar" Assignment3.TurtleStandalone.Assignment3Standalone $@

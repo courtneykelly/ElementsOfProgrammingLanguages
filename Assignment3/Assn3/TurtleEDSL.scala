@@ -121,6 +121,8 @@ object Assignment3Embedded {
   object TurtleDSLImpl extends TurtleDSL {
     type TurtleGraphics = TurtleGraphicsAST
 
+    val rand = new Random(System.currentTimeMillis())
+
     // AST Definition
     abstract class TurtleGraphicsAST
     case class TGEmpty() extends TurtleGraphicsAST
@@ -185,7 +187,6 @@ object Assignment3Embedded {
             return st
           }
           case TGSetRandomColor(cols: List[Color]) => {
-            val rand = new Random(System.currentTimeMillis())
             val num = rand.nextInt(cols.length)
             canvas.setLineColor(cols(num))
             return st

@@ -208,6 +208,51 @@ object Assignment3Standalone {
           case PairTy(a,b) => tyOf(ctx + (x -> a) + (y -> b), e2)
           case _ => sys.error("Let pair's first argument must be a pair")
         }
+        case LetFun(f,x,ty,e1,e2) => {
+          val ty2 = tyOf(ctx + (x -> ty), e1);
+          tyOf(ctx + (f -> FunTy(ty,ty2)), e2)
+        }
+        case LetRec(f,x,ty1,ty2,e1,e2) => {
+          val fty = FunTy(ty1,ty2);
+          if (tyOf(ctx + (x -> ty1) + (f -> fty), e1) == ty2) {
+            tyOf(ctx + (f -> fty), e2)
+          } else {
+            sys.error("Type of recursive function does not match specification")
+          }
+        }
+
+        //  Pairs 
+        case Pair(e1,e2) => PairTy(tyOf(ctx,e1),tyOf(ctx,e2))
+        case Fst(e) => tyOf(ctx,e) match {
+          case PairTy(a,b) => a
+          case _ => sys.error("First must be applied to a pair")
+        }
+        case Snd(e) => tyOf(ctx,e) match {
+          case PairTy(a,b) => b
+          case _ => sys.error("Second must be applied to a pair")
+        }
+
+        // Functions
+        case Lambda(x,ty,e) => FunTy(ty,tyOf(ctx + (x -> ty),e))
+        case Rec(f,x,xty,ty,e) => tyOf(ctx + (f -> FunTy(xty,ty)) + (x -> xty),e) match {
+          case body => if (ty == body) {
+            FunTy(xty,ty)
+          } else {
+            sys.error("Function body type does not match that specified")
+          }
+        }
+
+        case Apply(e1,e2) => (tyOf(ctx,e1),tyOf(ctx,e2)) match {
+          case (FunTy(a,b),c) => if (a == c) {
+            b
+          } else {
+            sys.error("Argument type does not match fuction input")
+          }
+          case (a,c) => sys.error("Function type not found!\n" +
+              "Typing " + e1.toString + "type is: " + a.toString + "\n" +
+              "Typing " + e2.toString + "type is: " + c.toString + "\n")
+        }
+        
 
         // Sequencing
         case Sequence(e1, e2) => (tyOf(ctx,e1),tyOf(ctx,e2)) match {
@@ -232,10 +277,10 @@ object Assignment3Standalone {
         }
 
         // References
-        case CreateRef(e) => RefTy
+        case CreateRef(e) => RefTy(tyOf(ctx,e))
         case Deref(e) => tyOf(ctx,e) match {
           case RefTy(t) => t
-          case _ => sys.error("...")
+          case _ => sys.error("type mismatch for Deref")
         }
         case Assign(e1, e2) => (tyOf(ctx,e1),tyOf(ctx,e2)) match {
           case (RefTy(t1),t2) => 
@@ -246,13 +291,18 @@ object Assignment3Standalone {
 
         // Lists 
         case EmptyList(t) => ListTy(t)
-        /*
         case Cons(e1, e2) => (tyOf(ctx,e1),tyOf(ctx,e2)) match {
-          case (a,b) => b 
+          case (t1, ListTy(t2)) =>
+            if (t1 == t2) {ListTy(t2)}
+            else {sys.error("type mismatch for Cons")}
           case _ => sys.error("type mismatch for Cons")
         }
-        */
-        case ListCase
+        case ListCase(e, e1, x, y, e2) => (tyOf(ctx,e), tyOf(ctx,e1), tyOf(ctx,e2)) match {
+          case (ListTy(t1), t2, t3) => 
+            if (t2 == t3) {t3}
+            else {sys.error("type mismatch for ListCase")}
+          case _ => sys.error("type mismatch for ListCase")
+        }
 
         // Turtle constructs
         case ColorV(c) => ColorTy
@@ -286,7 +336,6 @@ object Assignment3Standalone {
       }
     }
   }
-
 
   // Swapping (provided)
   def swapVar(x: Variable, y: Variable, z: Variable): Variable =
@@ -388,6 +437,7 @@ object Assignment3Standalone {
         case IfThenElse(t0,t1,t2) =>
           IfThenElse(subst(t0,e2,x),subst(t1,e2,x),subst(t2,e2,x))
 
+        // Variables and let-binding
         case Var(y) =>
           if (x == y) {
             e2
@@ -423,14 +473,12 @@ object Assignment3Standalone {
           LetPair(y1z,y2z,subst(t1,e2,x),
             subst(swap(swap(t2,y1z,y1), y2z, y2), e2,x))
         }
-
         case LetFun(f,y,ty,t1,t2) => {
           val fz = Gensym.gensym(f);
           val yz = Gensym.gensym(y);
           LetFun(fz,yz,ty,subst(swap(t1,yz,y),e2,x),
             subst(swap(t2,fz,f), e2,x))
         }
-
         case LetRec(f,y,ty1,ty2,t1,t2) => {
           val fz = Gensym.gensym(f);
           val yz = Gensym.gensym(y);
@@ -450,13 +498,21 @@ object Assignment3Standalone {
         // Lists
         case EmptyList(t) => EmptyList(t)
         case Cons(t1, t2) => Cons(subst(t1,e2,x),subst(t2,e2,x))
-        //case ListCase(l, t1, consVar1, consVar2, t2) => 
+        case ListCase(l, t1, consVar1, consVar2, t2) => {
+          val consVar1z = Gensym.gensym(consVar1)
+          val consVar2z = Gensym.gensym(consVar2)
+          ListCase(l, t1, consVar1z, consVar2z, 
+            subst(swap(swap(t2,consVar1z,consVar1), consVar2z, consVar2),e2,x))
+        }
 
         // Turtle constructs
+        case ColorV(c) => ColorV(c)
         case Forward(t) => Forward(subst(t,e2,x))
         case Backward(t) => Backward(subst(t,e2,x))
         case Right(t) => Right(subst(t,e2,x))
         case Left(t) => Left(subst(t,e2,x))
+        case PenUp() => PenUp()
+        case PenDown() => PenDown()
         case SetCol(t) => SetCol(subst(t,e2,x))
         case RandCol(t) => RandCol(subst(t,e2,x))
 
@@ -519,7 +575,7 @@ object Assignment3Standalone {
     // Lists
     case EmptyList(e) => EmptyList(e)
     case Cons(e1, e2) => Cons(desugar(e1), desugar(e2))
-    //case ListCase(l, t1, consVar1, consVar2, t2) =>
+    case ListCase(e, e1, x, y, e2) => ListCase(desugar(e), desugar(e1), x, y, desugar(e2))
 
     // Turtle constructs
     case Forward(e) => Forward(desugar(e))
@@ -535,7 +591,7 @@ object Assignment3Standalone {
     case While(p, b) => While(desugar(p), desugar(b))
     case DoWhile(b, p) => DoWhile(desugar(b), desugar(p))
 
-    case e => e // Num, bool, str, var
+    case e => e // Num, bool, color, var
     
   }
   
@@ -585,79 +641,182 @@ object Assignment3Standalone {
           val (state2, val2) = eval(state1,e2)
           (val1, val2) match {
             case (NumV(t1), NumV(t2)) => (state2, NumV(t1+t2))
+            case _ => sys.error("evaluation error at Plus")
           }
         }
-        case Minus(e1,e2) => 
-          (state, subtract(eval(state,e1),eval(state,e2)))
-        case Times(e1,e2) =>
-          (state, multiply(eval(state,e1),eval(state,e2)))
-        case Div(e1,e2) =>
-          (state, divide(eval(state,e1), eval(state, e2)))
+        case Minus(e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          (val1, val2) match {
+            case (NumV(t1), NumV(t2)) => (state2, NumV(t1-t2))
+            case _ => sys.error("Evaluation error at Minus")
+          }
+        }
+        case Times(e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          (val1, val2) match {
+            case (NumV(t1), NumV(t2)) => (state2, NumV(t1*t2))
+            case _ => sys.error("Evaluation error at Times")
+          }
+        }
+        case Div(e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          (val1, val2) match {
+            case (NumV(t1), NumV(t2)) => (state2, NumV(t1/t2))
+            case _ => sys.error("Evaluation error at Div")
+          }
+        }
           
         // Booleans
         case BoolV(b) => (state, BoolV(b))
-        case Eq(e1,e2) =>
-          (state, equal(eval(state,e1),eval(state,e2)))
-        case LessThan(e1,e2) => 
-          (state, equal(eval(state,e1),eval(state,e2)))
-        case GreaterThan(e1,e2) =>
-          (state, equal(eval(state,e1),eval(state,e2)))
-        case IfThenElse(e,e1,e2) =>
-          eval(state,e) match {
-            case (state, BoolV(true)) => (state, eval(state,e1))
-            case (state, BoolV(false)) => (state, eval(state,e2)
-            case _ =>  sys.error("conditional must evaluate to a boolean")
+        case Eq(e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          (val1, val2) match {
+            case (NumV(t1), NumV(t2)) => {
+              if (t1 == t2) {(state2, BoolV(true))}
+              else {(state2, BoolV(false))}
+            }
+            case _ => sys.error("Evaluation error at Eq")
           }
+        }
+        case LessThan(e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          (val1, val2) match {
+            case (NumV(t1), NumV(t2)) => (state2, BoolV(t1 < t2))
+            case _ => sys.error("evaluation error at LessThan")
+          }
+        }
+        case GreaterThan(e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          (val1, val2) match {
+            case (NumV(t1), NumV(t2)) => (state2, BoolV(t1 > t2))
+            case _ => sys.error("evaluation error at LessThan")
+          }
+        }
+        case IfThenElse(e,e1,e2) => {
+          val (state1, bool1) = eval(state,e)
+          (bool1) match {
+            case BoolV(true) => (eval(state1,e1))
+            case BoolV(false) => (eval(state1,e2))
+            case _ => sys.error("evaluation error at IfThenElse")
+          }
+        }
         
         // Variables + let
         /*
         case Var(x) =>
           env(x)
         */
-        case Let(x,e1,e2) =>
-          (state, eval(state + (x -> eval(env,e1)),e2)
-          
-        // Pairs
-        case Pair(e1,e2) =>
-          (state, PairV(eval(state,e1), eval(state,e2)))
-        case Fst(e) => eval(env,e) match {
-          case PairV(x,_) => (state, x)
-          case _ => sys.error("first must be applied to a pair")
+        case Let(x,e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          eval(state1,subst(e2,val1,x))
         }
-        case Snd(e) => eval(env,e) match {
-          case PairV(_,y) => (state, y)
-          case _ => sys.error("second must be applied to a pair")
-        }
+        // LetPair
+        // LetRec
+        // LetFun
 
+         
+        // Pairs
+        case Pair(e1,e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          return (state2, PairV(val1,val2))
+        }
+        case Fst(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case PairV(p1,p2) => (state1,p1)
+            case _ => sys.error("e must evaluate to a pair in Fst(e)")
+          }
+        }
+        case Snd(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case PairV(p1,p2) => (state1,p2)
+            case _ => sys.error("e must evaluate to a pair in Snd(e)")
+          }
+        }
+        
+        
         // Functions
-        /*
-        case Apply(e1,e2) =>
-          eval(env,e1) match {
-            case ClosureV(lamEnv,x,lamBody) =>
-              eval(lamEnv + (x -> eval(env,e2)),lamBody)
-            case RecV(recEnv,f,x,recBody) =>
-              eval(recEnv
-                + (f -> RecV(recEnv,f,x,recBody))
-                + (x -> eval(env,e2)),
-                recBody)
+        case Apply(e1,e2) => {
+          val (state1, val1) = eval(state, e1)
+          (val1) match {
+            case FunV(x,e) => {
+              val (state2, val2) = eval(state1,e2)
+              eval(state2, subst(e,val2,x))
+            }
+            case RecV(f,x,e) => {
+              val (state2, val2) = eval(state1,e2)
+              eval(state2, subst(subst(e,val2,x), RecV(f,x,e),f))
+            }
             case _ => sys.error("first argument of application must be a function")
           }
-        */
+        }
+        case Lambda(x, t, e) => (state, FunV(x,e))
+        case Rec(f, x, t1, t2, e) => (state, RecV(f,x,e))
+        
 
         // Sequencing 
-        case Sequence(e1, e2) => 
-
+        case Sequence(e1, e2) => {
+          val (state1, val1) = eval(state,e1)
+          return eval(state1,e2)
+        }
+        
         // References
         //case Loc(l) => 
-        case CreateRef(e) =>  
-        case Deref(e) => 
-        case Assign(e1, e2) => 
-
+        case CreateRef(e) => {
+          val (state1, val1) = eval(state,e)
+          val l = Genloc.genloc()
+          val state2 = updateVarMapping(l,val1,state1)
+          return (state2,LocV(l))
+        }
+        case Deref(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case LocV(l) => (state1,getVarMapping(l,state1))
+            case _ => sys.error("e needs to evaluate to a location in Deref(e)")
+          }
+        }
+        case Assign(e1, e2) => {
+          val (state1, val1) = eval(state,e1)
+          (val1) match {
+            case LocV(l) => {
+              val (state2, val2) = eval(state1,e2)
+              val state3 = updateVarMapping(l,val2,state2)
+              return (state3, UnitV)
+            }
+            case _ => sys.error("e1 needs to evaluate to a location in Assign(e1,e2)")
+          }
+        }
+        
         // Lists
-        //case EmptyList(e) => 
-        case Cons(e1, e2) => 
-        case ListCase(l, t1, consVar1, consVar2, t2) =>
-
+        case EmptyList(e) => {
+          eval(state,ListV(List()))
+        }
+        case Cons(e1, e2) => {
+          val (state1, val1) = eval(state,e1)
+          val (state2, val2) = eval(state1,e2)
+          (val2) match {
+            case ListV(list) => (state2, ListV(val1 :: list))
+          }
+        }
+        case ListCase(e, e1, x, y, e2) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case ListV(list) => (list) match {
+              case Nil => eval(state1,e1)
+              case v1 :: v2 => eval(state1,subst(subst(e2,ListV(v2),y),v1,x))
+            }
+            case _ => sys.error("e needs to evaluate to a ListV in ListCase(e,e1,x,y,e2)")
+          }
+        }
+        
         // Turtle constructs
         case Forward(e) => {
           val (state1, val1) = eval(state,e)
@@ -665,17 +824,62 @@ object Assignment3Standalone {
             case NumV(t) => (addGraphics(forward(t), state1), UnitV)
           }
         }
-        case Backward(e) => 
-        case Right(e) => 
-        case Left(e) => 
-        case SetCol(e) => 
-        case RandCol(e) => 
-        case PenUp() => 
-        case PenDown() => 
-
+        case Backward(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case NumV(t) => (addGraphics(backward(t), state1), UnitV)
+          }
+        }
+        case Right(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case NumV(t) => (addGraphics(right(t), state1), UnitV)
+          }
+        }
+        case Left(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case NumV(t) => (addGraphics(left(t), state1), UnitV)
+          }
+        }
+        case SetCol(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case ColorV(t) => (addGraphics(setColor(t), state1), UnitV)
+          }
+        }
+        case RandCol(e) => {
+          val (state1, val1) = eval(state,e)
+          (val1) match {
+            case ListV(list) => {
+              val l = list.map(x => (x) match {
+                    case ColorV(c) => c 
+                    })
+              return (addGraphics(setRandomColor(l), state1), UnitV)
+            }
+          }
+        }
+        case PenUp() => {
+          (addGraphics(penUp(), state), UnitV)
+        }
+        case PenDown() => {
+          (addGraphics(penDown(), state), UnitV) 
+        }
+       
         // Looping
-        case While(p, b) => 
-        case DoWhile(b, p) => 
+        case While(e1, e2) => {
+          val (state1, bool1) = eval(state,e1)
+          (bool1) match {
+            case BoolV(true) => {
+              val (state2, val1) = eval(state1,e2)
+              eval(state2, While(e1,e2))
+            }
+            case BoolV(false) => return (state1,UnitV)
+            case _ => sys.error("e1 needs to evaluate to a Boolean in While(e1,e2)")
+          }
+          
+        }
+        //case DoWhile(b, p) => 
 
       }
     }
